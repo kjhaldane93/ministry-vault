@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Ministry Vault & Search Engine</title>
+  <meta name="theme-color" content="#09090b">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#09090b',
+            surface: '#121215',
+            surfaceElevated: '#18181b',
+            surfaceBorder: '#27272a',
+            surfaceHighlight: '#3f3f46',
+            emeraldAccent: '#10b981',
+            amberAccent: '#f59e0b',
+            crimsonAccent: '#ef4444',
+            silverAccent: '#f4f4f5'
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Firebase Compatibility SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <style>
+    body { background-color: #09090b; color: #f4f4f5; font-feature-settings: "cv02", "cv03", "cv04", "cv11"; }
+    .hairline-border { border: 1px solid rgba(255, 255, 255, 0.08); }
+    .hairline-border-hover:hover { border-color: rgba(255, 255, 255, 0.2); }
+    .glass-card { background: rgba(18, 18, 21, 0.9); backdrop-filter: blur(16px); }
+    .custom-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+    .custom-scroll::-webkit-scrollbar-track { background: #09090b; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+    mark { background-color: rgba(245, 158, 11, 0.25); color: #fbbf24; border-radius: 2px; padding: 0 2px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans selection:bg-zinc-800 selection:text-white">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-4 sm:px-8 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-9 h-9 rounded-lg bg-zinc-100 flex items-center justify-center text-zinc-950 font-black text-sm shadow-sm">
+        <i data-lucide="book-marked" class="w-5 h-5 text-zinc-950"></i>
+      </div>
+      <div>
+        <h1 class="text-sm font-semibold tracking-tight text-white flex items-center gap-1.5 font-mono">
+          Ministry Vault & Search
+          <span class="inline-flex items-center px-1.5 py-0.2 text-[10px] font-mono uppercase rounded bg-zinc-800 text-zinc-300 border border-zinc-700/60">Archive</span>
+        </h1>
+        <p class="text-[11px] text-zinc-400 font-mono hidden sm:block">Full-Text Theological Index & Takeaways</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-2 sm:space-x-3">
+      <button onclick="openSyncModal()" id="syncBtn" class="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-md bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-xs font-mono transition-all text-zinc-400 hover:text-zinc-200">
+        <span id="syncDot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="syncStatusText">Connect Key</span>
+      </button>
+      <a href="https://kjhaldane93.github.io/discipline-engine/" target="_blank" class="px-3 py-1.5 text-xs font-mono bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-md border border-zinc-700/80 flex items-center gap-1.5">
+        <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        <span class="hidden sm:inline">Engine</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- SEARCH & METRIC BAR -->
+    <div class="glass-card rounded-xl p-5 hairline-border space-y-4">
+      <div class="flex flex-col md:flex-row gap-3">
+        <!-- Live Search Input -->
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+          <input type="text" id="vaultSearchInput" oninput="executeSearch()" placeholder="Search authors, books, page numbers, notes, takeaways, or concepts..." class="w-full bg-zinc-950 border border-zinc-700 rounded-lg pl-10 pr-10 py-2.5 text-sm text-white placeholder-zinc-500 font-mono focus:outline-none focus:border-amberAccent">
+          <button onclick="clearSearch()" id="clearBtn" class="hidden absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">✕</button>
+        </div>
+
+        <!-- Filter Dropdown: Author -->
+        <div class="w-full md:w-48">
+          <select id="authorFilter" onchange="executeSearch()" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-xs text-zinc-300 font-mono focus:outline-none focus:border-amberAccent">
+            <option value="ALL">All Authors</option>
+          </select>
+        </div>
+
+        <!-- Filter Dropdown: Book -->
+        <div class="w-full md:w-56">
+          <select id="bookFilter" onchange="executeSearch()" class="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2.5 text-xs text-zinc-300 font-mono focus:outline-none focus:border-amberAccent">
+            <option value="ALL">All Books</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Tag Cloud Filter -->
+      <div class="space-y-2 pt-1 border-t border-zinc-800/80">
+        <div class="flex items-center justify-between text-xs font-mono text-zinc-500">
+          <span>FILTER BY SUBJECT TAG</span>
+          <button onclick="clearTagFilter()" id="clearTagBtn" class="text-amberAccent hover:underline text-[11px] hidden">Reset Tag Filter</button>
+        </div>
+        <div id="tagCloudContainer" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scroll pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS STRIP -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+      <div class="bg-zinc-900/60 p-3 rounded-lg border border-zinc-800/80">
+        <span class="text-zinc-500 block text-[10px]">RECORDED SESSIONS</span>
+        <span id="statSessions" class="text-lg font-bold text-white mt-0.5 block">0</span>
+      </div>
+      <div class="bg-zinc-900/60 p-3 rounded-lg border border-zinc-800/80">
+        <span class="text-zinc-500 block text-[10px]">TAKEAWAYS INDEXED</span>
+        <span id="statTakeaways" class="text-lg font-bold text-emeraldAccent mt-0.5 block">0</span>
+      </div>
+      <div class="bg-zinc-900/60 p-3 rounded-lg border border-zinc-800/80">
+        <span class="text-zinc-500 block text-[10px]">BOOKS RECORDED</span>
+        <span id="statBooks" class="text-lg font-bold text-amberAccent mt-0.5 block">0</span>
+      </div>
+      <div class="bg-zinc-900/60 p-3 rounded-lg border border-zinc-800/80">
+        <span class="text-zinc-500 block text-[10px]">AUTHORS CATALOGED</span>
+        <span id="statAuthors" class="text-lg font-bold text-zinc-300 mt-0.5 block">0</span>
+      </div>
+    </div>
+
+    <!-- RESULTS HEADER & LIST -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between text-xs font-mono text-zinc-400 px-1">
+        <span id="resultsCount">Showing 0 matching records</span>
+        <span class="text-zinc-600">Chronological Order</span>
+      </div>
+
+      <div id="resultsList" class="space-y-4">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- CLOUD SYNC MODAL -->
+  <div id="syncModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-zinc-900 border border-zinc-800 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="cloud" class="w-4 h-4 text-emeraldAccent"></i>
+          <h3 class="text-sm font-semibold text-white font-mono uppercase">Connect Discipline Cloud</h3>
+        </div>
+        <button onclick="closeSyncModal()" class="text-zinc-400 hover:text-white">✕</button>
+      </div>
+
+      <p class="text-xs text-zinc-400 leading-relaxed">
+        Enter the same <span class="text-white font-semibold">Private Sync Key</span> you use on your Discipline Engine dashboard. This gives this search app direct read access to your ministry records.
+      </p>
+
+      <div>
+        <label class="block text-[11px] font-mono text-zinc-400 mb-1">PROJECT ID</label>
+        <input type="text" value="disciplineengine-604e9" readonly class="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-xs text-zinc-500 font-mono">
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-mono text-zinc-400 mb-1">PRIVATE SYNC KEY</label>
+        <input type="text" id="syncKeyInput" placeholder="e.g. kevin2026" class="w-full bg-zinc-950 border border-zinc-700 focus:border-amberAccent rounded px-3 py-2 text-xs text-white font-mono focus:outline-none">
+      </div>
+
+      <div class="pt-2 flex justify-end gap-2">
+        <button onclick="closeSyncModal()" class="px-4 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-xs font-mono text-zinc-300">Cancel</button>
+        <button onclick="saveAndConnectSync()" class="px-4 py-2 rounded bg-amberAccent hover:bg-amber-400 text-zinc-950 font-semibold text-xs font-mono">Connect & Index</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDg-xrWvfRQc4i02lSkwLHXOhQaEUG2WDE",
+      authDomain: "disciplineengine-604e9.firebaseapp.com",
+      projectId: "disciplineengine-604e9",
+      storageBucket: "disciplineengine-604e9.firebasestorage.app",
+      messagingSenderId: "58306677761",
+      appId: "1:58306677761:web:aa9feda5d9594498a84110",
+      measurementId: "G-WBHR420JHV"
+    };
+
+    let db = null;
+    let syncKey = localStorage.getItem('kevin_sync_key') || '';
+    let flatTakeawayIndex = [];
+    let activeTagFilter = null;
+
+    function initFirebase() {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+        if (syncKey) {
+          connectSync(syncKey);
+        } else {
+          openSyncModal();
+        }
+      } catch (err) {
+        console.error("Firebase init failed:", err);
+      }
+    }
+
+    function connectSync(key) {
+      if (!db || !key) return;
+      document.getElementById('syncDot').className = 'w-2 h-2 rounded-full bg-emeraldAccent';
+      document.getElementById('syncStatusText').textContent = 'Vault Connected';
+
+      db.collection('engines').doc(key).onSnapshot(doc => {
+        if (doc.exists) {
+          const raw = doc.data();
+          if (raw && raw.state) {
+            try {
+              const fullState = JSON.parse(raw.state);
+              buildIndexFromState(fullState);
+            } catch (e) {
+              console.error("Parse state error:", e);
+            }
+          }
+        } else {
+          document.getElementById('resultsList').innerHTML = `
+            <div class="glass-card rounded-xl p-8 hairline-border text-center text-zinc-500 font-mono text-xs">
+              Connected to cloud, but no discipline data found under key "${escapeHtml(key)}".<br>
+              Make sure you have logged data on your main Discipline Engine dashboard.
+            </div>`;
+        }
+      }, err => {
+        console.error("Firestore listen error:", err);
+        document.getElementById('syncDot').className = 'w-2 h-2 rounded-full bg-crimsonAccent';
+        document.getElementById('syncStatusText').textContent = 'Offline';
+      });
+    }
+
+    function buildIndexFromState(state) {
+      flatTakeawayIndex = [];
+      const moralData = state.moral || {};
+      const dates = Object.keys(moralData).sort().reverse();
+
+      const authorsSet = new Set();
+      const booksSet = new Set();
+      const tagsMap = {};
+
+      dates.forEach(dStr => {
+        const dayEntry = moralData[dStr];
+        if (!dayEntry) return;
+
+        const mainWhatIRead = dayEntry.ministryReadSummary || '';
+        const takeaways = [
+          {
+            num: 1,
+            author: (dayEntry.t1_author || '').trim(),
+            book: (dayEntry.t1_book || '').trim(),
+            page: (dayEntry.t1_page || '').trim(),
+            notes: (dayEntry.t1_notes || '').trim(),
+            tags: dayEntry.t1_tags || []
+          },
+          {
+            num: 2,
+            author: (dayEntry.t2_author || '').trim(),
+            book: (dayEntry.t2_book || '').trim(),
+            page: (dayEntry.t2_page || '').trim(),
+            notes: (dayEntry.t2_notes || '').trim(),
+            tags: dayEntry.t2_tags || []
+          },
+          {
+            num: 3,
+            author: (dayEntry.t3_author || '').trim(),
+            book: (dayEntry.t3_book || '').trim(),
+            page: (dayEntry.t3_page || '').trim(),
+            notes: (dayEntry.t3_notes || '').trim(),
+            tags: dayEntry.t3_tags || []
+          }
+        ];
+
+        takeaways.forEach(t => {
+          if (t.author || t.book || t.notes || (t.tags && t.tags.length)) {
+            if (t.author) authorsSet.add(t.author);
+            if (t.book) booksSet.add(t.book);
+            t.tags.forEach(tag => {
+              tagsMap[tag] = (tagsMap[tag] || 0) + 1;
+            });
+
+            flatTakeawayIndex.push({
+              date: dStr,
+              mainWhatIRead,
+              num: t.num,
+              author: t.author,
+              book: t.book,
+              page: t.page,
+              notes: t.notes,
+              tags: t.tags
+            });
+          }
+        });
+      });
+
+      // Update Quick Stats
+      document.getElementById('statSessions').textContent = dates.length;
+      document.getElementById('statTakeaways').textContent = flatTakeawayIndex.length;
+      document.getElementById('statBooks').textContent = booksSet.size;
+      document.getElementById('statAuthors').textContent = authorsSet.size;
+
+      // Populate Filters
+      populateFilterDropdown('authorFilter', authorsSet, 'All Authors');
+      populateFilterDropdown('bookFilter', booksSet, 'All Books');
+      renderTagCloud(tagsMap);
+
+      executeSearch();
+    }
+
+    function populateFilterDropdown(elementId, itemSet, defaultText) {
+      const select = document.getElementById(elementId);
+      const currentVal = select.value;
+      select.innerHTML = `<option value="ALL">${defaultText}</option>`;
+      Array.from(itemSet).sort().forEach(item => {
+        select.innerHTML += `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`;
+      });
+      if (itemSet.has(currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
+    function renderTagCloud(tagsMap) {
+      const container = document.getElementById('tagCloudContainer');
+      container.innerHTML = '';
+      const sortedTags = Object.keys(tagsMap).sort((a,b) => tagsMap[b] - tagsMap[a]);
+
+      if (sortedTags.length === 0) {
+        container.innerHTML = '<span class="text-zinc-600 text-xs font-mono">No subject tags recorded yet.</span>';
+        return;
+      }
+
+      sortedTags.forEach(tag => {
+        const count = tagsMap[tag];
+        const isActive = activeTagFilter === tag;
+        const btn = document.createElement('button');
+        btn.onclick = () => toggleTagFilter(tag);
+        btn.className = `px-2 py-0.5 rounded text-[11px] font-mono transition-all border ${
+          isActive 
+            ? 'bg-amberAccent text-zinc-950 border-amberAccent font-bold' 
+            : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+        }`;
+        btn.innerHTML = `#${escapeHtml(tag)} <span class="text-[9px] opacity-70">(${count})</span>`;
+        container.appendChild(btn);
+      });
+    }
+
+    function toggleTagFilter(tag) {
+      if (activeTagFilter === tag) {
+        activeTagFilter = null;
+        document.getElementById('clearTagBtn').classList.add('hidden');
+      } else {
+        activeTagFilter = tag;
+        document.getElementById('clearTagBtn').classList.remove('hidden');
+      }
+      executeSearch();
+      // Re-highlight tags
+      const currentTagsMap = {};
+      flatTakeawayIndex.forEach(item => {
+        item.tags.forEach(t => { currentTagsMap[t] = (currentTagsMap[t] || 0) + 1; });
+      });
+      renderTagCloud(currentTagsMap);
+    }
+
+    function clearTagFilter() {
+      activeTagFilter = null;
+      document.getElementById('clearTagBtn').classList.add('hidden');
+      executeSearch();
+    }
+
+    function clearSearch() {
+      document.getElementById('vaultSearchInput').value = '';
+      document.getElementById('clearBtn').classList.add('hidden');
+      executeSearch();
+    }
+
+    function executeSearch() {
+      const query = document.getElementById('vaultSearchInput').value.trim().toLowerCase();
+      const authorFilter = document.getElementById('authorFilter').value;
+      const bookFilter = document.getElementById('bookFilter').value;
+
+      const clearBtn = document.getElementById('clearBtn');
+      if (query) clearBtn.classList.remove('hidden');
+      else clearBtn.classList.add('hidden');
+
+      const filtered = flatTakeawayIndex.filter(item => {
+        if (authorFilter !== 'ALL' && item.author !== authorFilter) return false;
+        if (bookFilter !== 'ALL' && item.book !== bookFilter) return false;
+        if (activeTagFilter && !item.tags.includes(activeTagFilter)) return false;
+
+        if (query) {
+          const combined = [
+            item.date,
+            item.author,
+            item.book,
+            item.page,
+            item.notes,
+            item.mainWhatIRead,
+            item.tags.join(' ')
+          ].join(' ').toLowerCase();
+
+          return combined.includes(query);
+        }
+        return true;
+      });
+
+      document.getElementById('resultsCount').textContent = `Showing ${filtered.length} matching ${filtered.length === 1 ? 'takeaway' : 'takeaways'}`;
+      renderResults(filtered, query);
+    }
+
+    function renderResults(results, query) {
+      const container = document.getElementById('resultsList');
+      container.innerHTML = '';
+
+      if (results.length === 0) {
+        container.innerHTML = `
+          <div class="glass-card rounded-xl p-10 hairline-border text-center text-zinc-500 font-mono text-xs space-y-2">
+            <i data-lucide="inbox" class="w-8 h-8 mx-auto text-zinc-600 mb-1"></i>
+            <div>No matching ministry entries found for your filters.</div>
+            <div class="text-[11px] text-zinc-600">Try loosening your search terms or clearing tag filters.</div>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      results.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'glass-card rounded-xl p-5 hairline-border hairline-border-hover transition-all space-y-3';
+
+        // Tag Pills HTML
+        const tagsHtml = item.tags.length ? item.tags.map(t => 
+          `<span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400">#${highlight(escapeHtml(t), query)}</span>`
+        ).join(' ') : '<span class="text-[10px] font-mono text-zinc-600 italic">No subject tags</span>';
+
+        card.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-zinc-800/80 gap-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-amberAccent"></span>
+              <span class="text-xs font-bold font-mono text-white">${highlight(escapeHtml(item.book || 'Untitled Work'), query)}</span>
+              ${item.page ? `<span class="text-[11px] font-mono text-zinc-400">· p. ${highlight(escapeHtml(item.page), query)}</span>` : ''}
+              <span class="px-1.5 py-0.2 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700/60">Takeaway ${item.num}</span>
+            </div>
+            <div class="text-xs font-mono text-zinc-400 flex items-center space-x-3">
+              <span>${highlight(escapeHtml(item.author || 'Unknown Author'), query)}</span>
+              <span class="text-zinc-600">|</span>
+              <span class="text-zinc-400">${item.date}</span>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="text-xs text-zinc-200 leading-relaxed font-sans whitespace-pre-wrap pl-2 border-l-2 border-zinc-800 py-0.5">
+            ${highlight(escapeHtml(item.notes || '(No notes entered for this takeaway)'), query)}
+          </div>
+
+          <!-- Footer with Tags & Copy Action -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pt-2 border-t border-zinc-800/60 gap-2">
+            <div class="flex flex-wrap gap-1.5 items-center">
+              ${tagsHtml}
+            </div>
+            <button onclick="copyTakeaway('${escapeForAttr(item.author)}', '${escapeForAttr(item.book)}', '${escapeForAttr(item.page)}', '${escapeForAttr(item.notes)}')" class="self-end sm:self-auto px-2.5 py-1 text-[11px] font-mono bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded border border-zinc-800 flex items-center gap-1 transition-all">
+              <i data-lucide="copy" class="w-3 h-3"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      lucide.createIcons();
+    }
+
+    function highlight(text, query) {
+      if (!query || !text) return text;
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+    }
+
+    function escapeForAttr(str) {
+      if (!str) return '';
+      return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/\n/g, ' ');
+    }
+
+    function copyTakeaway(author, book, page, notes) {
+      const citation = `${author ? author + ', ' : ''}${book ? `"${book}"` : ''}${page ? ` (p. ${page})` : ''}`.trim();
+      const payload = `${citation ? citation + '\n' : ''}${notes}`;
+      navigator.clipboard.writeText(payload).then(() => {
+        alert("Takeaway copied to clipboard.");
+      });
+    }
+
+    // SYNC MODAL
+    function openSyncModal() {
+      document.getElementById('syncKeyInput').value = syncKey;
+      document.getElementById('syncModal').classList.remove('hidden');
+      document.getElementById('syncModal').classList.add('flex');
+    }
+    function closeSyncModal() {
+      document.getElementById('syncModal').classList.add('hidden');
+      document.getElementById('syncModal').classList.remove('flex');
+    }
+    function saveAndConnectSync() {
+      const val = document.getElementById('syncKeyInput').value.trim();
+      if (!val) return alert("Please enter your private sync key.");
+      syncKey = val;
+      localStorage.setItem('kevin_sync_key', syncKey);
+      connectSync(syncKey);
+      closeSyncModal();
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initFirebase();
+    });
+  </script>
+</body>
+</html>
